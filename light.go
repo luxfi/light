@@ -1,59 +1,39 @@
 // Copyright (C) 2019-2025, Lux Partners Limited. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-// Package light is the single canonical source of the well-known Lux "light"
-// dev mnemonic and of the deterministic ACCOUNT (wallet) keys derived from it.
-//
-// Scope: LOCAL network only (primary network ID 1337, EVM chain ID 31337).
-// The mnemonic is public by design — anyone can derive every account key from
-// it, so it MUST NEVER back a production network. RefuseOnProduction is the
-// guard that enforces this.
-//
-// This package deliberately owns ONLY the deterministic value: the mnemonic
-// and the secp256k1 wallet keys / addresses at the canonical BIP44 path
-// m/44'/9000'/0'/0/i. It has NO staker-cert / NodeID / BLS surface: validator
-// staking identities are intentionally NON-deterministic (random per-node
-// staker keys, so a public seed can never impersonate a node) and live with
-// each node's key material, never here.
+// Package light holds the one copy of the public Lux "light" dev mnemonic and
+// the wallet keys derived from it. Local networks only (network ID 1337, EVM
+// chain ID 31337). The seed is public, so it must never back a real network;
+// RefuseOnProduction enforces that. No staker, node ID, or BLS material lives
+// here — validator keys are random per node and kept with each node.
 package light
 
 import "crypto/subtle"
 
-// Mnemonic is the well-known public Lux dev seed. Pass it as the value of
-// LUX_MNEMONIC (or LIGHT_MNEMONIC) to bootstrap a local network. It is the
-// SINGLE source of truth for this string across the ecosystem — every other
-// package that needs it should reference light.Mnemonic, never re-declare it.
+// Mnemonic is the public Lux dev seed. Use it as LUX_MNEMONIC (or
+// LIGHT_MNEMONIC) to boot a local network. Reference this const; never copy the
+// literal.
 const Mnemonic = "light light light light light light light light light light light energy"
 
-// knownPublicMnemonics is the curated set of seeds anyone in the world can
-// derive from. RefuseOnProduction accepts exactly these (they are safe to use
-// on a throwaway local mesh); anything else is treated as a real/production
-// seed that must never flow through the light (local-only) derivation path.
-//
-// Ported verbatim from genesis' light_mnemonic_guard so the two guards agree.
+// knownPublicMnemonics are the seeds anyone can derive from. RefuseOnProduction
+// admits exactly these; anything else is treated as a real seed. Kept in sync
+// with genesis' light_mnemonic_guard.
 var knownPublicMnemonics = []string{
 	Mnemonic,
-	// BIP-39 test vector #1 (canonical "abandon" mnemonic).
 	"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
-	// BIP-39 test vector #5.
 	"legal winner thank year wave sausage worth useful legal winner thank yellow",
-	// Hardhat / Foundry default test mnemonic.
 	"test test test test test test test test test test test junk",
-	// Trezor demo seed.
 	"witch collapse practice feed shame open despair creek road again ice least",
-	// Common "all abandon" BIP-39 vector.
 	"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon",
 }
 
-// IsLight reports whether s is exactly the light Mnemonic. Compared in constant
-// time so a timing attacker cannot probe the running config from outside.
+// IsLight reports whether s is the light Mnemonic, in constant time.
 func IsLight(s string) bool {
 	return subtle.ConstantTimeCompare([]byte(s), []byte(Mnemonic)) == 1
 }
 
-// isKnownPublic reports whether m appears in any well-known public list. Every
-// entry is compared (no short-circuit) so the loop reveals neither which entry
-// matched nor whether it matched early.
+// isKnownPublic reports whether m is a known public seed. Every entry is
+// compared, so the loop leaks neither which matched nor when.
 func isKnownPublic(m string) bool {
 	matched := false
 	mb := []byte(m)
@@ -65,18 +45,10 @@ func isKnownPublic(m string) bool {
 	return matched
 }
 
-// RefuseOnProduction returns a non-nil error when the supplied mnemonic must
-// not be used through the light (local-only) derivation path:
-//
-//   - empty string        → error (no mnemonic set)
-//   - any non-public seed  → error (looks like a real/production mnemonic;
-//     luxfi/light is for local dev only, and a production seed must never be
-//     fed into a code path that derives from a publicly-known layout)
-//
-// A recognised public/dev mnemonic (light, BIP-39 vectors, Hardhat, Trezor…)
-// returns nil. This mirrors genesis.RefuseLightMnemonicOnProduction, minus the
-// network-ID coupling: the caller decides WHERE it runs; this decides WHETHER a
-// mnemonic is a safe public/dev value.
+// RefuseOnProduction returns an error for an empty seed or any seed that is not
+// a known public one; a known public seed returns nil. It mirrors
+// genesis.RefuseLightMnemonicOnProduction without the network coupling: the
+// caller decides where it runs, this decides whether the seed is public.
 func RefuseOnProduction(mnemonic string) error {
 	if mnemonic == "" {
 		return errEmptyMnemonic
